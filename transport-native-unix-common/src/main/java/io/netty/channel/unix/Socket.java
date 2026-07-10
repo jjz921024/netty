@@ -614,7 +614,15 @@ public class Socket extends FileDescriptor {
     }
 
     protected static int newSocketStream0(boolean ipv6) {
-        int res = newSocketStreamFd(ipv6);
+        int res = newSocketStreamFd(ipv6, 0);
+        if (res < 0) {
+            throw new ChannelException(newIOException("newSocketStream", res));
+        }
+        return res;
+    }
+
+    protected static int newSocketStream0(boolean ipv6, int protocol) {
+        int res = newSocketStreamFd(ipv6, protocol);
         if (res < 0) {
             throw new ChannelException(newIOException("newSocketStream", res));
         }
@@ -713,7 +721,7 @@ public class Socket extends FileDescriptor {
     private static native int sendFd(int socketFd, int fd);
     private static native int msgFastopen();
 
-    private static native int newSocketStreamFd(boolean ipv6);
+    private static native int newSocketStreamFd(boolean ipv6, int protocol);
     private static native int newSocketDgramFd(boolean ipv6);
     private static native int newSocketDomainFd();
     private static native int newSocketDomainDgramFd();

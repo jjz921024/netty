@@ -312,6 +312,23 @@ final class LinuxSocket extends Socket {
         return new LinuxSocket(newSocketStream0(ipv6));
     }
 
+    /**
+     * Creates a new stream socket, optionally using Multipath TCP.
+     *
+     * @param protocol the address family
+     * @param mptcp    {@code true} to create the socket with {@code IPPROTO_MPTCP}; {@code false}
+     *                 for a regular TCP socket (identical to
+     *                 {@link #newSocketStream(boolean)})
+     * @throws ChannelException if {@code mptcp} is {@code true} but the kernel does not support MPTCP
+     */
+    public static LinuxSocket newSocketStream(SocketProtocolFamily protocol, boolean mptcp) {
+        if (mptcp && !isMptcpSupported()) {
+            throw new ChannelException("MPTCP is not supported by the kernel");
+        }
+        int fd = newSocketStream0(shouldUseIpv6(protocol), mptcp ? IPPROTO_MPTCP : 0);
+        return new LinuxSocket(fd);
+    }
+
     public static LinuxSocket newSocketStream() {
         return newSocketStream(isIPv6Preferred());
     }
@@ -388,4 +405,32 @@ final class LinuxSocket extends Socket {
     private static native void setTimeToLive(int fd, int ttl) throws IOException;
     private static native int makeBlocking(int fd) throws IOException;
     private static native void setUdpGro(int fd, int gro) throws IOException;
+
+    // MPTCP capability probe + protocol-number constant. See IPPROTO_MPTCP in netty_*_linuxsocket.c.
+    private static native boolean isMptcpSupported0();
+
+    /**
+     * The kernel protocol number for Multipath TCP ({@code IPPROTO_MPTCP}), defined since Linux 5.6
+     * in the UAPI headers as a frozen ABI value. Kept as a literal rather than fetched via JNI so
+     * that referencing it never triggers a native call during class initialization (which would
+     * race with the native-library load, since the epoll/io_uring loader touches this class before
+     * its natives are registered).
+     */
+    public static final int IPPROTO_MPTCP = 262;
+
+    /**
+     * Returns {@code true} if the kernel supports Multipath TCP, i.e. a socket can be
+     * created with {@code IPPROTO_MPTCP}. This is a runtime capability probe; actual multipath
+     * behaviour additionally requires {@code net.mptcp.enabled=1}. The probe runs at most once and
+     * the result is cached, since kernel protocol support is a stable per-host property.
+     */
+    public static boolean isMptcpSupported() {
+        return MptcpHolder.SUPPORTED;
+    }
+
+    // Initialization-on-demand holder keeps the native probe out of LinuxSocket's own <clinit>,
+    // so loading the native library (which touches this class) cannot deadlock / race with it.
+    private static final class MptcpHolder {
+        private static final boolean SUPPORTED = isMptcpSupported0();
+    }
 }

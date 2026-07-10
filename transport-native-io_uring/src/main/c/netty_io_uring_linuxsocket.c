@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h> // close()
 #include <netinet/in.h>
 #include <netinet/udp.h> // SOL_UDP
 #include <linux/tcp.h> // TCP_NOTSENT_LOWAT is a linux specific define
@@ -61,6 +62,11 @@
 // UDP_GRO is defined in linux 5. We define this here so older kernels can compile.
 #ifndef UDP_GRO
 #define UDP_GRO 104
+#endif
+
+// IPPROTO_MPTCP is defined in linux 5.6. We define this here so older kernels can compile.
+#ifndef IPPROTO_MPTCP
+#define IPPROTO_MPTCP 262
 #endif
 
 // IP_MULTICAST_ALL defined in linux 2.6.31. We define this here so older kernels can compile.
@@ -692,6 +698,17 @@ error:
 static void netty_epoll_linuxsocket_setUdpGro(JNIEnv* env, jclass clazz, jint fd, jint optval) {
     netty_unix_socket_setOption(env, fd, SOL_UDP, UDP_GRO, &optval, sizeof(optval));
 }
+
+static jboolean netty_io_uring_linuxsocket_isMptcpSupported0(JNIEnv* env, jclass clazz) {
+    // Mirror the isSupportingUdpSegment probe pattern in netty_epoll_native.c: try to actually
+    // create a socket with the protocol. On kernels without MPTCP socket(2) fails with EPROTONOSUPPORT.
+    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_MPTCP);
+    if (fd == -1) {
+        return JNI_FALSE;
+    }
+    close(fd);
+    return JNI_TRUE;
+}
 // JNI Registered Methods End
 
 // JNI Method Registration Table Begin
@@ -738,7 +755,8 @@ static const JNINativeMethod fixed_method_table[] = {
   { "joinSsmGroup", "(IZ[B[BII[B)V", (void *) netty_io_uring_linuxsocket_joinSsmGroup },
   { "leaveGroup", "(IZ[B[BII)V", (void *) netty_io_uring_linuxsocket_leaveGroup },
   { "leaveSsmGroup", "(IZ[B[BII[B)V", (void *) netty_io_uring_linuxsocket_leaveSsmGroup },
-  { "setUdpGro", "(II)V", (void *) netty_epoll_linuxsocket_setUdpGro }
+  { "setUdpGro", "(II)V", (void *) netty_epoll_linuxsocket_setUdpGro },
+  { "isMptcpSupported0", "()Z", (void *) netty_io_uring_linuxsocket_isMptcpSupported0 }
 };
 
 static const jint fixed_method_table_size = sizeof(fixed_method_table) / sizeof(fixed_method_table[0]);

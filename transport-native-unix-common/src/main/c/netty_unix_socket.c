@@ -300,8 +300,8 @@ static int netty_unix_socket_setOption0(jint fd, int level, int optname, const v
     return setsockopt(fd, level, optname, optval, len);
 }
 
-static jint _socket(JNIEnv* env, jclass clazz, int domain, int type) {
-    int fd = netty_unix_socket_nonBlockingSocket(domain, type, 0);
+static jint _socket(JNIEnv* env, jclass clazz, int domain, int type, int protocol) {
+    int fd = netty_unix_socket_nonBlockingSocket(domain, type, protocol);
     if (fd == -1) {
         return -errno;
     } else if (domain == AF_INET6) {
@@ -746,12 +746,12 @@ static jbyteArray netty_unix_socket_localDomainSocketAddress(JNIEnv* env, jclass
 
 static jint netty_unix_socket_newSocketDgramFd(JNIEnv* env, jclass clazz, jboolean ipv6) {
     int domain = ipv6 == JNI_TRUE ? AF_INET6 : AF_INET;
-    return _socket(env, clazz, domain, SOCK_DGRAM);
+    return _socket(env, clazz, domain, SOCK_DGRAM, 0);
 }
 
-static jint netty_unix_socket_newSocketStreamFd(JNIEnv* env, jclass clazz, jboolean ipv6) {
+static jint netty_unix_socket_newSocketStreamFd(JNIEnv* env, jclass clazz, jboolean ipv6, jint protocol) {
     int domain = ipv6 == JNI_TRUE ? AF_INET6 : AF_INET;
-    return _socket(env, clazz, domain, SOCK_STREAM);
+    return _socket(env, clazz, domain, SOCK_STREAM, protocol);
 }
 
 static jint netty_unix_socket_newSocketDomainFd(JNIEnv* env, jclass clazz) {
@@ -1278,7 +1278,7 @@ static const JNINativeMethod fixed_method_table[] = {
   { "remoteDomainSocketAddress", "(I)[B", (void *) netty_unix_socket_remoteDomainSocketAddress },
   { "localDomainSocketAddress", "(I)[B", (void *) netty_unix_socket_localDomainSocketAddress },
   { "newSocketDgramFd", "(Z)I", (void *) netty_unix_socket_newSocketDgramFd },
-  { "newSocketStreamFd", "(Z)I", (void *) netty_unix_socket_newSocketStreamFd },
+  { "newSocketStreamFd", "(ZI)I", (void *) netty_unix_socket_newSocketStreamFd },
   { "newSocketDomainFd", "()I", (void *) netty_unix_socket_newSocketDomainFd },
   { "newSocketDomainDgramFd", "()I", (void *) netty_unix_socket_newSocketDomainDgramFd },
   { "sendTo", "(IZLjava/nio/ByteBuffer;II[BIII)I", (void *) netty_unix_socket_sendTo },

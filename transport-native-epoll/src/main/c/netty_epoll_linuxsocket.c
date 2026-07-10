@@ -24,6 +24,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <unistd.h> // close()
 #include <netinet/in.h>
 #include <netinet/udp.h> // SOL_UDP
 #include <sys/sendfile.h>
@@ -61,6 +62,11 @@
 // UDP_GRO is defined in linux 5. We define this here so older kernels can compile.
 #ifndef UDP_GRO
 #define UDP_GRO 104
+#endif
+
+// IPPROTO_MPTCP is defined in linux 5.6. We define this here so older kernels can compile.
+#ifndef IPPROTO_MPTCP
+#define IPPROTO_MPTCP 262
 #endif
 
 // IP_BIND_ADDRESS_NO_PORT is defined in linux 4.2. We define this here so older kernels can compile.
@@ -781,6 +787,17 @@ static void netty_epoll_linuxsocket_setUdpGro(JNIEnv* env, jclass clazz, jint fd
     netty_unix_socket_setOption(env, fd, SOL_UDP, UDP_GRO, &optval, sizeof(optval));
 }
 
+static jboolean netty_epoll_linuxsocket_isMptcpSupported0(JNIEnv* env, jclass clazz) {
+    // Mirror the isSupportingUdpSegment probe pattern in netty_epoll_native.c: try to actually
+    // create a socket with the protocol. On kernels without MPTCP socket(2) fails with EPROTONOSUPPORT.
+    int fd = socket(AF_INET, SOCK_STREAM, IPPROTO_MPTCP);
+    if (fd == -1) {
+        return JNI_FALSE;
+    }
+    close(fd);
+    return JNI_TRUE;
+}
+
 
 static jlong netty_epoll_linuxsocket_sendFile(JNIEnv* env, jclass clazz, jint fd, jobject fileRegion, jlong base_off, jlong off, jlong len) {
     jobject fileChannel = (*env)->GetObjectField(env, fileRegion, fileChannelFieldId);
@@ -866,7 +883,8 @@ static const JNINativeMethod fixed_method_table[] = {
   { "leaveGroup", "(IZ[B[BII)V", (void *) netty_epoll_linuxsocket_leaveGroup },
   { "leaveSsmGroup", "(IZ[B[BII[B)V", (void *) netty_epoll_linuxsocket_leaveSsmGroup },
   { "isUdpGro", "(I)I", (void *) netty_epoll_linuxsocket_isUdpGro },
-  { "setUdpGro", "(II)V", (void *) netty_epoll_linuxsocket_setUdpGro }
+  { "setUdpGro", "(II)V", (void *) netty_epoll_linuxsocket_setUdpGro },
+  { "isMptcpSupported0", "()Z", (void *) netty_epoll_linuxsocket_isMptcpSupported0 }
 
   // "sendFile" has a dynamic signature
 };
